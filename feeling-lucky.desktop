@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=I'm Feeling Lucky
+Comment=Endless radio of music from artists you've never saved
+Exec=@DIR@/bin/feeling-lucky
+Icon=@DIR@/icon.svg
+Terminal=false
+Categories=AudioVideo;Audio;

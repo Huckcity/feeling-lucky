@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>I'm Feeling Lucky</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #121212;
+    --text: #f2f2f2;
+    --muted: #a3a3a3;
+    --accent: #ff6d00;
+    --on-accent: #1c0b00;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #fafafa;
+      --text: #1a1a1a;
+      --muted: #5c5c5c;
+      --accent: #c43e00;
+      --on-accent: #ffffff;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Ubuntu, Roboto, sans-serif;
+  }
+  main {
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 32px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    text-align: center;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 600; color: var(--muted); }
+  .brand img { width: 24px; height: 24px; }
+  .go {
+    width: 200px; height: 200px; border: 0; border-radius: 50%;
+    background: var(--accent); color: var(--on-accent);
+    font-family: inherit; font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: .04em;
+    cursor: pointer;
+    box-shadow: 0 12px 48px color-mix(in srgb, var(--accent) 35%, transparent);
+    transition: transform .15s ease;
+  }
+  .go:hover { transform: scale(1.03); }
+  .go:active { transform: scale(.97); }
+  .go:disabled { cursor: progress; animation: breathe .9s ease-in-out infinite alternate; }
+  .go:disabled:not(.busy) { animation: none; opacity: .4; cursor: not-allowed; }
+  @keyframes breathe { to { transform: scale(.94); opacity: .75; } }
+  .note { margin: 0; min-height: 1.5em; }
+  .hint { margin: 0; font-size: 14px; color: var(--muted); }
+  kbd { font: inherit; padding: 0 4px; border: 1px solid var(--muted); border-radius: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand"><img src="/icon.svg" alt="">I'm Feeling Lucky</p>
+  <button id="go" class="go">Go</button>
+  <p id="note" class="note" role="status"></p>
+  <p class="hint">
+    Plays here in YouTube Music: artists you've never saved, from somewhere near a random artist you know.<br>
+    <kbd>Alt</kbd>+<kbd>←</kbd> comes back here to roll again. To keep a station, press Save at the top of Up next.
+  </p>
+</main>
+<script>
+  const goButton = document.getElementById("go");
+  const note = document.getElementById("note");
+
+  function idle(message = "", allowed = true) {
+    goButton.classList.remove("busy");
+    goButton.disabled = !allowed;
+    note.textContent = message;
+  }
+
+  goButton.onclick = async () => {
+    goButton.classList.add("busy");
+    goButton.disabled = true;
+    note.textContent = "Rolling the dice…";
+    try {
+      const response = await fetch("/api/go", { method: "POST", headers: { "X-Lucky": "1" } });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      note.textContent = `${data.count} tracks from around ${data.seed}, via ${data.source}`;
+      location.href = data.url;
+    } catch (e) {
+      idle(e.message);
+    }
+  };
+
+  // Back from YouTube Music restores this page exactly as it was left, mid-roll
+  addEventListener("pageshow", e => { if (e.persisted) idle(); });
+
+  fetch("/api/status").then(r => r.json()).then(({ state, error, warning }) => {
+    if (state === "setup") idle(error, false);
+    else if (state === "error") idle(error);
+    else if (state === "loading") idle("Reading your library for the first time. Go will wait for it.");
+    else if (warning) idle(warning);
+  }).catch(() => idle("The Feeling Lucky server isn't running.", false));
+</script>
+</body>
+</html>

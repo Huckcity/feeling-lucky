@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Start the Feeling Lucky server if it isn't running, then open its window.
+set -euo pipefail
+export PATH="$HOME/.local/bin:$PATH"
+
+dir="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+port="${LUCKY_PORT:-7461}"
+url="http://127.0.0.1:$port/"
+log="$HOME/.cache/feeling-lucky/server.log"
+# credentials come from a `secrets` store when there is one, otherwise from the environment
+names="$(command -v secrets >/dev/null && secrets list || true)"
+
+status="$(curl -fsS "${url}api/status" 2>/dev/null || true)"
+# started before a login was added: restart so it picks the login up
+if [[ $status == *'"setup"'* ]] && grep -qxE "YTMUSIC_AUTH|LASTFM_API_KEY" <<<"$names"; then
+  pkill -f "$dir/app.py" || true
+  sleep 0.5
+  status=""
+fi
+
+if [[ -z $status ]]; then
+  mkdir -p "$(dirname "$log")"
+  keys=()
+  for key in YTMUSIC_AUTH YTMUSIC_CLIENT_ID YTMUSIC_CLIENT_SECRET LASTFM_API_KEY LASTFM_USER; do
+    if grep -qx "$key" <<<"$names"; then keys+=("$key"); fi
+  done
+  serve=(uv run --project "$dir" python "$dir/app.py")
+  if ((${#keys[@]})); then serve=(secrets run "${keys[@]}" -- "${serve[@]}"); fi
+  LUCKY_PORT="$port" setsid -f "${serve[@]}" >>"$log" 2>&1 </dev/null
+  for _ in $(seq 50); do
+    curl -fsS -o /dev/null "${url}api/status" 2>/dev/null && break
+    sleep 0.2
+  done
+fi
+
+# an app window: the station plays in it, and Back returns to Go in the same window,
+# so a new roll replaces the old one instead of playing over it
+if command -v google-chrome >/dev/null; then
+  setsid -f google-chrome --app="$url" >/dev/null 2>&1
+else
+  xdg-open "$url"
+fi
